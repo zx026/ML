@@ -1,14 +1,18 @@
 import asyncio
 import yfinance as yf
-import pandas_ta as ta
 import sqlite3
 import schedule
 import time
 from datetime import datetime
+
 from telegram.ext import Application, CommandHandler
 
+from ta.momentum import RSIIndicator, StochasticOscillator
+from ta.volatility import BollingerBands
+from ta.trend import SMAIndicator
+
 # ========= CONFIG =========
-TOKEN = "8330533753:AAG_2Fn5deWSVIx1euC-LshE4JNmSA9Jtgs"
+TOKEN = "YOUR_BOT_TOKEN_HERE"
 CHAT_ID = -1003635838231
 PAIRS = ["EURUSD=X"]
 SIGNALS_DB = "ml_binary_signals.db"
@@ -49,6 +53,7 @@ CREATE TABLE IF NOT EXISTS trades (
 conn.commit()
 
 
+# ========= DB HELPERS =========
 def save_candle(pair, t, close, rsi2, stoch, bb_pos, vol, vol_sma):
     cur.execute("""
         INSERT INTO candles
@@ -88,27 +93,54 @@ def get_stats():
 async def scan_and_signal(app: Application):
     for symbol in PAIRS:
         try:
-            data = yf.download(symbol, period="2d", interval="1m", progress=False)
+            data = yf.download(
+                symbol,
+                period="2d",
+                interval="1m",
+                progress=False
+            )
+
             if len(data) < 50:
                 continue
 
-            data["RSI2"] = ta.rsi(data["Close"], 2)
-            stoch = ta.stoch(data["High"], data["Low"], data["Close"])
-            data["Stoch"] = stoch["STOCHk_14_3_3"]
+            # ----- Indicators -----
+            data["RSI2"] = RSIIndicator(
+                close=data["Close"],
+                window=2
+            ).rsi()
 
-            bb = ta.bbands(data["Close"], length=20)
-            data["BB_lower"] = bb["BBL_20_2.0"]
-            data["BB_upper"] = bb["BBU_20_2.0"]
+            stoch = StochasticOscillator(
+                high=data["High"],
+                low=data["Low"],
+                close=data["Close"],
+                window=14,
+                smooth_window=3
+            )
+            data["Stoch"] = stoch.stoch()
 
-            data["Volume_SMA"] = ta.sma(data["Volume"], 10)
+            bb = BollingerBands(
+                close=data["Close"],
+                window=20,
+                window_dev=2
+            )
+            data["BB_lower"] = bb.bollinger_lband()
+            data["BB_upper"] = bb.bollinger_hband()
+
+            data["Volume_SMA"] = SMAIndicator(
+                close=data["Volume"],
+                window=10
+            ).sma_indicator()
 
             latest = data.iloc[-1]
 
             bb_pos = (latest["Close"] - latest["BB_lower"]) / (
                 latest["BB_upper"] - latest["BB_lower"] + 1e-9
             )
-            vol_ratio = latest["Volume"] / (latest["Volume_SMA"] + 1e-9)
+            vol_ratio = latest["Volume"] / (
+                latest["Volume_SMA"] + 1e-9
+            )
 
+            # Save candle for ML
             save_candle(
                 symbol,
                 latest.name.isoformat(),
@@ -120,6 +152,7 @@ async def scan_and_signal(app: Application):
                 float(latest["Volume_SMA"]),
             )
 
+            # ----- RULE BASED SIGNAL -----
             direction = None
             text_sig = None
 
@@ -155,14 +188,17 @@ async def scan_and_signal(app: Application):
                 msg = (
                     f"📊 {symbol}\n"
                     f"Price: {latest['Close']:.5f}\n"
-                    f"RSI2: {latest['RSI2']:.1f}\n"
+                    f"RSI(2): {latest['RSI2']:.1f}\n"
                     f"Stoch: {latest['Stoch']:.1f}\n"
                     f"Volume Ratio: {vol_ratio:.2f}\n"
                     f"Signal: {text_sig}\n\n"
                     "Features saved for ML training."
                 )
 
-                await app.bot.send_message(chat_id=CHAT_ID, text=msg)
+                await app.bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=msg
+                )
 
         except Exception as e:
             print("Error:", symbol, e)
@@ -176,8 +212,7 @@ async def start(update, context):
         f"Pairs: {', '.join(PAIRS)}\n"
         f"Trades stored: {total} (W:{w} L:{l})\n"
         f"Winrate est: {winrate:.1f}%\n\n"
-        "Bot market data + ML features store kar raha hai.\n"
-        "/stats se status dekho."
+        "/stats se detailed status dekho."
     )
 
 
@@ -202,7 +237,6 @@ async def main():
 
     await app.initialize()
     await app.start()
-    await app.bot.initialize()
 
     schedule.every(2).minutes.do(
         lambda: asyncio.create_task(scan_and_signal(app))
