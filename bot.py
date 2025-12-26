@@ -8,16 +8,15 @@ from datetime import datetime
 from telegram.ext import Application, CommandHandler
 
 # ========= CONFIG =========
-TOKEN = "8330533753:AAG_2Fn5deWSVIx1euC-LshE4JNmSA9Jtgs"
-CHAT_ID = -1003635838231                 # tumhara group chat id
-PAIRS = ["EURUSD=X"]                     # ML ke liye pehle 1 pair rakho
+TOKEN = "YOUR_BOT_TOKEN_HERE"
+CHAT_ID = -1003635838231
+PAIRS = ["EURUSD=X"]
 SIGNALS_DB = "ml_binary_signals.db"
 
 # ========= DATABASE =========
 conn = sqlite3.connect(SIGNALS_DB, check_same_thread=False)
 cur = conn.cursor()
 
-# Features + trades table
 cur.execute("""
 CREATE TABLE IF NOT EXISTS candles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,8 +42,8 @@ CREATE TABLE IF NOT EXISTS trades (
     stoch REAL,
     bb_pos REAL,
     volume_ratio REAL,
-    result INTEGER,        -- 1=win,0=loss,NULL=unknown
-    pl REAL                -- profit/loss amount (optional)
+    result INTEGER,
+    pl REAL
 )
 """)
 conn.commit()
@@ -52,7 +51,8 @@ conn.commit()
 
 def save_candle(pair, t, close, rsi2, stoch, bb_pos, vol, vol_sma):
     cur.execute("""
-        INSERT INTO candles (time,pair,close,rsi2,stoch,bb_pos,volume,volume_sma)
+        INSERT INTO candles
+        (time,pair,close,rsi2,stoch,bb_pos,volume,volume_sma)
         VALUES (?,?,?,?,?,?,?,?)
     """, (t, pair, close, rsi2, stoch, bb_pos, vol, vol_sma))
     conn.commit()
@@ -60,10 +60,19 @@ def save_candle(pair, t, close, rsi2, stoch, bb_pos, vol, vol_sma):
 
 def save_trade(pair, direction, entry_price, rsi2, stoch, bb_pos, vol_ratio):
     cur.execute("""
-        INSERT INTO trades (time,pair,direction,entry_price,rsi2,stoch,bb_pos,volume_ratio,result,pl)
+        INSERT INTO trades
+        (time,pair,direction,entry_price,rsi2,stoch,bb_pos,volume_ratio,result,pl)
         VALUES (?,?,?,?,?,?,?,?,NULL,NULL)
-    """, (datetime.utcnow().isoformat(), pair, direction, entry_price,
-          rsi2, stoch, bb_pos, vol_ratio))
+    """, (
+        datetime.utcnow().isoformat(),
+        pair,
+        direction,
+        entry_price,
+        rsi2,
+        stoch,
+        bb_pos,
+        vol_ratio
+    ))
     conn.commit()
 
 
@@ -75,7 +84,7 @@ def get_stats():
     return total, w, l, winrate
 
 
-# ========= SIGNAL + DATA COLLECTION =========
+# ========= SIGNAL SCAN =========
 async def scan_and_signal(app: Application):
     for symbol in PAIRS:
         try:
@@ -86,20 +95,20 @@ async def scan_and_signal(app: Application):
             data["RSI2"] = ta.rsi(data["Close"], 2)
             stoch = ta.stoch(data["High"], data["Low"], data["Close"])
             data["Stoch"] = stoch["STOCHk_14_3_3"]
+
             bb = ta.bbands(data["Close"], length=20)
             data["BB_lower"] = bb["BBL_20_2.0"]
             data["BB_upper"] = bb["BBU_20_2.0"]
+
             data["Volume_SMA"] = ta.sma(data["Volume"], 10)
 
             latest = data.iloc[-1]
 
-            # ---- feature calculation for ML ----
             bb_pos = (latest["Close"] - latest["BB_lower"]) / (
                 latest["BB_upper"] - latest["BB_lower"] + 1e-9
-            )  # 0=lower,1=upper
+            )
             vol_ratio = latest["Volume"] / (latest["Volume_SMA"] + 1e-9)
 
-            # Save candle for learning
             save_candle(
                 symbol,
                 latest.name.isoformat(),
@@ -111,7 +120,6 @@ async def scan_and_signal(app: Application):
                 float(latest["Volume_SMA"]),
             )
 
-            # ---- rule-based signal ----
             direction = None
             text_sig = None
 
@@ -134,7 +142,6 @@ async def scan_and_signal(app: Application):
                 text_sig = "💥 SUPER PUT ❌"
 
             if direction:
-                # Save trade for future ML training
                 save_trade(
                     symbol,
                     direction,
@@ -146,65 +153,66 @@ async def scan_and_signal(app: Application):
                 )
 
                 msg = (
-                    f"{symbol}: {latest['Close']:.5f} | RSI2: {latest['RSI2']:.1f} | "
-                    f"Stoch: {latest['Stoch']:.1f} | {text_sig}
-"
+                    f"📊 {symbol}\n"
+                    f"Price: {latest['Close']:.5f}\n"
+                    f"RSI2: {latest['RSI2']:.1f}\n"
+                    f"Stoch: {latest['Stoch']:.1f}\n"
+                    f"Volume Ratio: {vol_ratio:.2f}\n"
+                    f"Signal: {text_sig}\n\n"
                     "Features saved for ML training."
                 )
+
                 await app.bot.send_message(chat_id=CHAT_ID, text=msg)
 
         except Exception as e:
             print("Error:", symbol, e)
 
 
-# ========= TELEGRAM =========
+# ========= TELEGRAM COMMANDS =========
 async def start(update, context):
     total, w, l, winrate = get_stats()
     await update.message.reply_text(
-        "🤖 ML-ready Binary Bot ON
-"
-        f"Pairs: {', '.join(PAIRS)}
-"
-        f"Trades stored: {total} (W:{w} L:{l}) Winrate est: {winrate:.1f}%
-"
-        "Bot ab market data + features store karega.
-"
-        "/stats se status dekh sakte ho."
+        "🤖 ML-ready Binary Bot ON\n"
+        f"Pairs: {', '.join(PAIRS)}\n"
+        f"Trades stored: {total} (W:{w} L:{l})\n"
+        f"Winrate est: {winrate:.1f}%\n\n"
+        "Bot market data + ML features store kar raha hai.\n"
+        "/stats se status dekho."
     )
 
 
 async def stats(update, context):
     total, w, l, winrate = get_stats()
     await update.message.reply_text(
-        "📊 STATS
-"
-        f"Trades stored: {total}
-"
-        f"Wins: {w}
-"
-        f"Losses: {l}
-"
-        f"Winrate: {winrate:.1f}%
-"
-        "Note: result column abhi manually/auto fill hona baaki hai."
+        "📊 STATS\n"
+        f"Trades stored: {total}\n"
+        f"Wins: {w}\n"
+        f"Losses: {l}\n"
+        f"Winrate: {winrate:.1f}%\n\n"
+        "Note: result column abhi auto-fill nahi hai."
     )
 
 
+# ========= MAIN =========
 async def main():
     app = Application.builder().token(TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
 
     await app.initialize()
     await app.start()
-    await app.updater.start_polling()
+    await app.bot.initialize()
 
-    # har 2 minute me scan
-    schedule.every(2).minutes.do(lambda: asyncio.create_task(scan_and_signal(app)))
+    schedule.every(2).minutes.do(
+        lambda: asyncio.create_task(scan_and_signal(app))
+    )
+
+    print("🤖 Bot running...")
 
     while True:
         schedule.run_pending()
-        time.sleep(1)
+        await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
