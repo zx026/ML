@@ -8,7 +8,7 @@ from datetime import datetime
 from telegram.ext import Application, CommandHandler
 
 # ========= CONFIG =========
-TOKEN = "YAHAN_APNA_TELEGRAM_BOT_TOKEN"
+TOKEN = "8330533753:AAG_2Fn5deWSVIx1euC-LshE4JNmSA9Jtgs"
 CHAT_IDS = set()
 PAIRS = ["EURUSD=X"]  # ML ke liye pehle 1 pair rakho
 SIGNALS_DB = "ml_binary_signals.db"
