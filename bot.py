@@ -12,7 +12,7 @@ from ta.volatility import BollingerBands
 from ta.trend import SMAIndicator
 
 # ========= CONFIG =========
-TOKEN = "8330533753:AAG_2Fn5deWSVIx1euC-LshE4JNmSA9Jtgs"
+TOKEN = "YOUR_BOT_TOKEN_HERE"
 CHAT_ID = -1003635838231
 PAIRS = ["EURUSD=X"]
 SIGNALS_DB = "ml_binary_signals.db"
@@ -103,6 +103,9 @@ async def scan_and_signal(app: Application):
             if len(data) < 50:
                 continue
 
+            # 🔥 FIX: force Volume to 1-D
+            data["Volume"] = data["Volume"].squeeze()
+
             # ----- Indicators -----
             data["RSI2"] = RSIIndicator(
                 close=data["Close"],
@@ -152,7 +155,7 @@ async def scan_and_signal(app: Application):
                 float(latest["Volume_SMA"]),
             )
 
-            # ----- RULE BASED SIGNAL -----
+            # ----- SIGNAL RULES -----
             direction = None
             text_sig = None
 
