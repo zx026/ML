@@ -9,8 +9,8 @@ from telegram.ext import Application, CommandHandler
 
 # ========= CONFIG =========
 TOKEN = "8330533753:AAG_2Fn5deWSVIx1euC-LshE4JNmSA9Jtgs"
-CHAT_IDS = set()
-PAIRS = ["EURUSD=X"]  # ML ke liye pehle 1 pair rakho
+CHAT_ID = -1003635838231                 # <-- tumhara group chat id
+PAIRS = ["EURUSD=X"]                     # ML ke liye pehle 1 pair rakho
 SIGNALS_DB = "ml_binary_signals.db"
 
 # ========= DATABASE =========
@@ -111,7 +111,7 @@ async def scan_and_signal(app: Application):
                 float(latest["Volume_SMA"]),
             )
 
-            # ---- rule-based signal (as before) ----
+            # ---- rule-based signal ----
             direction = None
             text_sig = None
 
@@ -151,8 +151,7 @@ async def scan_and_signal(app: Application):
 "
                     f"Features saved for ML training."
                 )
-                for cid in CHAT_IDS:
-                    await app.bot.send_message(chat_id=cid, text=msg)
+                await app.bot.send_message(chat_id=CHAT_ID, text=msg)
 
         except Exception as e:
             print("Error:", symbol, e)
@@ -160,7 +159,6 @@ async def scan_and_signal(app: Application):
 
 # ========= TELEGRAM =========
 async def start(update, context):
-    CHAT_IDS.add(update.effective_chat.id)
     total, w, l, winrate = get_stats()
     await update.message.reply_text(
         "🤖 ML-ready Binary Bot ON
@@ -179,10 +177,14 @@ async def stats(update, context):
     total, w, l, winrate = get_stats()
     await update.message.reply_text(
         f"📊 STATS
-Trades stored: {total}
-Wins: {w}
-Losses: {l}
-Winrate: {winrate:.1f}%
+"
+        f"Trades stored: {total}
+"
+        f"Wins: {w}
+"
+        f"Losses: {l}
+"
+        f"Winrate: {winrate:.1f}%
 "
         "Note: result column abhi manually/auto fill hona baaki hai."
     )
