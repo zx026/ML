@@ -12,7 +12,7 @@ from ta.volatility import BollingerBands
 from ta.trend import SMAIndicator
 
 # ========= CONFIG =========
-TOKEN = "YOUR_BOT_TOKEN_HERE"
+TOKEN = "8330533753:AAG_2Fn5deWSVIx1euC-LshE4JNmSA9Jtgs"
 CHAT_ID = -1003635838231
 PAIRS = ["EURUSD=X"]
 SIGNALS_DB = "ml_binary_signals.db"
