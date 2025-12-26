@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler
 
 # ========= CONFIG =========
 TOKEN = "8330533753:AAG_2Fn5deWSVIx1euC-LshE4JNmSA9Jtgs"
-CHAT_ID = -1003635838231                 # <-- tumhara group chat id
+CHAT_ID = -1003635838231                 # tumhara group chat id
 PAIRS = ["EURUSD=X"]                     # ML ke liye pehle 1 pair rakho
 SIGNALS_DB = "ml_binary_signals.db"
 
@@ -149,7 +149,7 @@ async def scan_and_signal(app: Application):
                     f"{symbol}: {latest['Close']:.5f} | RSI2: {latest['RSI2']:.1f} | "
                     f"Stoch: {latest['Stoch']:.1f} | {text_sig}
 "
-                    f"Features saved for ML training."
+                    "Features saved for ML training."
                 )
                 await app.bot.send_message(chat_id=CHAT_ID, text=msg)
 
@@ -176,7 +176,7 @@ async def start(update, context):
 async def stats(update, context):
     total, w, l, winrate = get_stats()
     await update.message.reply_text(
-        f"📊 STATS
+        "📊 STATS
 "
         f"Trades stored: {total}
 "
